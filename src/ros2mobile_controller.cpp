@@ -3,7 +3,7 @@
 using namespace std;
 using std::placeholders::_1;
 
-Ros2MobileController::Ros2MobileController() : Node("mobile_controller") {
+Ros2MobileController::Ros2MobileController() : Node("ros2mobile_controller") {
   subscription_ = this->create_subscription<ros2usb_msgs::msg::USBPacket>(
       sub_topic, 10, bind(&Ros2MobileController::topic_callback, this, _1));
 }
@@ -19,21 +19,23 @@ bool Ros2MobileController::connectToController() {
   receiver_addr.sin_addr.s_addr = inet_addr(local_address.c_str());
   receiver_addr.sin_port = htons(local_port);
   // Bind the receiver socket to the local address and port
-  if (bind(receiver_socket_fd, (sockaddr *)&receiver_addr,
-           sizeof(receiver_addr)) < 0) {
-    RCLCPP_ERROR_STREAM(this->get_logger(), "Failed to bind receiver socket");
-    return false;
-  }
   while (rclcpp::ok()) {
+    if (bind(receiver_socket_fd, (sockaddr *)&receiver_addr,
+             sizeof(receiver_addr)) < 0) {
+      RCLCPP_ERROR_STREAM(this->get_logger(), "Failed to bind receiver socket");
+      return false;
+    }
     RCLCPP_INFO_STREAM(this->get_logger(), "Waiting for connection ...");
     char buffer[1024];
+    socklen_t sender_addr_len = sizeof(sender_addr);
     memset(buffer, 0, sizeof(buffer));
-    recv(receiver_socket_fd, buffer, sizeof(buffer), 0);
-    auto bytes_received =
-        recvfrom(receiver_socket_fd, buffer, sizeof(buffer), 0,
-                 (sockaddr *)&sender_addr, (socklen_t *)sizeof(sender_addr));
-    if (bytes_received < 0) {
-      RCLCPP_ERROR_STREAM(this->get_logger(), "Failed to receive data");
+    recvfrom(receiver_socket_fd, buffer, sizeof(buffer), 0,
+             (sockaddr *)&sender_addr, &sender_addr_len);
+    if (sizeof(buffer) == 0) {
+      RCLCPP_ERROR_STREAM(this->get_logger(),
+                          "Failed to receive data From "
+                              << inet_ntoa(sender_addr.sin_addr) << ":"
+                              << ntohs(sender_addr.sin_port));
       rclcpp::sleep_for(chrono::seconds(1));
       continue;
     }
@@ -62,6 +64,9 @@ bool Ros2MobileController::connectToController() {
         rclcpp::sleep_for(chrono::seconds(1));
         continue;
       }
+      RCLCPP_INFO_STREAM(this->get_logger(), "Sent pong response to "
+                                                 << remote_address << ":"
+                                                 << remote_port);
       break;
     }
   }

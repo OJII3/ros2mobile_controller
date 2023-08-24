@@ -8,16 +8,15 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
-class Ros2MobileController : rclcpp::Node {
+class Ros2MobileController : public rclcpp::Node {
 public:
   Ros2MobileController();
   ~Ros2MobileController();
   bool connectToController();
-  void sendToController(const ros2usb_msgs::msg::USBPacket::SharedPtr &msg);
 
 private:
   void topic_callback(const ros2usb_msgs::msg::USBPacket &msg);
-
+  void sendToController(const ros2usb_msgs::msg::USBPacket::SharedPtr &msg);
   bool connected = false;
   int sender_socket_fd;
   int receiver_socket_fd;

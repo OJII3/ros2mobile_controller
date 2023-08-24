@@ -5,7 +5,7 @@
   <version>0.0.0</version>
   <description>TODO: Package description</description>
   <maintainer email="84656786+OJII3@users.noreply.github.com">ojii3</maintainer>
-  <license>MIT</license>
+  <license>Apache2.0</license>
 
   <buildtool_depend>ament_cmake_auto</buildtool_depend>
 
