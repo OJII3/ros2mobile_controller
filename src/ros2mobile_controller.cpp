@@ -8,20 +8,17 @@ Ros2MobileController::Ros2MobileController() : Node("ros2mobile_controller") {
       sub_topic, 10, bind(&Ros2MobileController::topic_callback, this, _1));
 }
 
-Ros2MobileController::~Ros2MobileController() {
-  close(receiver_socket_fd);
-  close(sender_socket_fd);
-}
+Ros2MobileController::~Ros2MobileController() { close(socket_fd); }
 
 bool Ros2MobileController::connectToController() {
-  receiver_socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
+  socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
   receiver_addr.sin_family = AF_INET;
   receiver_addr.sin_addr.s_addr = inet_addr(local_address.c_str());
   receiver_addr.sin_port = htons(local_port);
   // Bind the receiver socket to the local address and port
   while (rclcpp::ok()) {
-    if (bind(receiver_socket_fd, (sockaddr *)&receiver_addr,
-             sizeof(receiver_addr)) < 0) {
+    if (bind(socket_fd, (sockaddr *)&receiver_addr, sizeof(receiver_addr)) <
+        0) {
       RCLCPP_ERROR_STREAM(this->get_logger(), "Failed to bind receiver socket");
       return false;
     }
@@ -29,8 +26,8 @@ bool Ros2MobileController::connectToController() {
     char buffer[1024];
     socklen_t sender_addr_len = sizeof(sender_addr);
     memset(buffer, 0, sizeof(buffer));
-    recvfrom(receiver_socket_fd, buffer, sizeof(buffer), 0,
-             (sockaddr *)&sender_addr, &sender_addr_len);
+    recvfrom(socket_fd, buffer, sizeof(buffer), 0, (sockaddr *)&sender_addr,
+             &sender_addr_len);
     if (sizeof(buffer) == 0) {
       RCLCPP_ERROR_STREAM(this->get_logger(),
                           "Failed to receive data From "
@@ -53,13 +50,13 @@ bool Ros2MobileController::connectToController() {
       RCLCPP_INFO_STREAM(this->get_logger(), "Received ping request from "
                                                  << remote_address << ":"
                                                  << remote_port);
-      sender_socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
+      socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
       sender_addr.sin_family = AF_INET;
       sender_addr.sin_addr.s_addr = inet_addr(remote_address.c_str());
       sender_addr.sin_port = htons(remote_port);
       // Send a pong response to the remote
-      if (sendto(sender_socket_fd, "pong-robot", 10, 0,
-                 (sockaddr *)&sender_addr, sizeof(sender_addr)) < 0) {
+      if (sendto(socket_fd, "pong-robot", 10, 0, (sockaddr *)&sender_addr,
+                 sizeof(sender_addr)) < 0) {
         RCLCPP_ERROR_STREAM(this->get_logger(), "Failed to send pong response");
         rclcpp::sleep_for(chrono::seconds(1));
         continue;
@@ -81,8 +78,8 @@ void Ros2MobileController::sendToController(
   vector<byte> packet;
   memcpy(packet.data(), msg->packet.data.data(), msg->packet.data.size());
   packet.insert(packet.begin(), id);
-  sendto(sender_socket_fd, packet.data(), packet.size(), 0,
-         (sockaddr *)&sender_addr, sizeof(sender_addr));
+  sendto(socket_fd, packet.data(), packet.size(), 0, (sockaddr *)&sender_addr,
+         sizeof(sender_addr));
 }
 
 void Ros2MobileController::topic_callback(

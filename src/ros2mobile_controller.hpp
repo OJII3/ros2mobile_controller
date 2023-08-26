@@ -10,6 +10,12 @@
 
 class Ros2MobileController : public rclcpp::Node {
 public:
+  enum ConnectionState {
+    Connected,
+    Disconnected,
+    Connecting,
+  };
+  ConnectionState connection_state = Disconnected;
   Ros2MobileController();
   ~Ros2MobileController();
   bool connectToController();
@@ -17,9 +23,7 @@ public:
 private:
   void topic_callback(const ros2usb_msgs::msg::USBPacket &msg);
   void sendToController(const ros2usb_msgs::msg::USBPacket::SharedPtr &msg);
-  bool connected = false;
-  int sender_socket_fd;
-  int receiver_socket_fd;
+  int socket_fd;
   struct sockaddr_in sender_addr;
   struct sockaddr_in receiver_addr;
   std::string local_address = "0.0.0.0";
