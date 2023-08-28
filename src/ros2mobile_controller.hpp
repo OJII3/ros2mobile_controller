@@ -8,7 +8,8 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
-class Ros2MobileController : public rclcpp::Node {
+// TODO: create UDPClient class and use it in this class
+class ROS2MobileController : public rclcpp::Node {
 public:
   enum ConnectionState {
     Connected,
@@ -16,21 +17,28 @@ public:
     Connecting,
   };
   ConnectionState connection_state = Disconnected;
-  Ros2MobileController();
-  ~Ros2MobileController();
-  bool connectToController();
+  ROS2MobileController();
+  ~ROS2MobileController();
+  void connect();
+  void send(const std::vector<std::byte> &buffer);
+  void Receive(std::array<std::byte, 1024> &buffer);
 
 private:
-  void topic_callback(const ros2usb_msgs::msg::USBPacket &msg);
-  void sendToController(const ros2usb_msgs::msg::USBPacket::SharedPtr &msg);
+  void topicCallback(const ros2usb_msgs::msg::USBPacket &msg);
+  void rosmsgToBytes(const ros2usb_msgs::msg::USBPacket &msg,
+                     std::vector<std::byte> &result_buffer);
   int socket_fd;
-  struct sockaddr_in sender_addr;
-  struct sockaddr_in receiver_addr;
-  std::string local_address = "0.0.0.0";
+  struct sockaddr_in local_addr;
+  struct sockaddr_in remote_addr;
+  socklen_t local_addr_len = sizeof(local_addr);
+  socklen_t remote_addr_len = sizeof(remote_addr);
+  const std::string local_address = "0.0.0.0";
   std::string remote_address = "";
   int local_port = 10000;
   int remote_port = 10001;
   rclcpp::Subscription<ros2usb_msgs::msg::USBPacket>::SharedPtr subscription_;
   rclcpp::Publisher<ros2usb_msgs::msg::USBPacket>::SharedPtr publisher_;
+  const char *ping_message = "ping-robot";
+  const char *pong_message = "pong-robot";
   const std::string sub_topic = "ros2micon";
 };

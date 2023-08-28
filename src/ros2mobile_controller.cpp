@@ -1,90 +1,106 @@
 #include "ros2mobile_controller.hpp"
+#include <sys/socket.h>
 
-using namespace std;
 using std::placeholders::_1;
 
-Ros2MobileController::Ros2MobileController() : Node("ros2mobile_controller") {
+ROS2MobileController::ROS2MobileController() : Node("ros2mobile_controller") {
   subscription_ = this->create_subscription<ros2usb_msgs::msg::USBPacket>(
-      sub_topic, 10, bind(&Ros2MobileController::topic_callback, this, _1));
+      sub_topic, 10, bind(&ROS2MobileController::topicCallback, this, _1));
 }
 
-Ros2MobileController::~Ros2MobileController() { close(socket_fd); }
+ROS2MobileController::~ROS2MobileController() { close(socket_fd); }
 
-bool Ros2MobileController::connectToController() {
+void ROS2MobileController::connect() {
+  connection_state = ConnectionState::Connecting;
+
   socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
-  receiver_addr.sin_family = AF_INET;
-  receiver_addr.sin_addr.s_addr = inet_addr(local_address.c_str());
-  receiver_addr.sin_port = htons(local_port);
-  // Bind the receiver socket to the local address and port
+  local_addr.sin_family = AF_INET;
+  local_addr.sin_addr.s_addr = inet_addr(local_address.c_str());
+  local_addr.sin_port = htons(local_port);
+
   while (rclcpp::ok()) {
-    if (bind(socket_fd, (sockaddr *)&receiver_addr, sizeof(receiver_addr)) <
-        0) {
-      RCLCPP_ERROR_STREAM(this->get_logger(), "Failed to bind receiver socket");
-      return false;
+    // Bind the socket to the local address and port
+    auto bind_result =
+        bind(socket_fd, (sockaddr *)&local_addr, sizeof(local_addr));
+
+    if (bind_result < 0) {
+      RCLCPP_INFO_STREAM(this->get_logger(),
+                         "Failed to bind port. Retrying...");
+      rclcpp::sleep_for(std::chrono::seconds(5));
+      return;
     }
-    RCLCPP_INFO_STREAM(this->get_logger(), "Waiting for connection ...");
+    RCLCPP_INFO_STREAM(this->get_logger(),
+                       "Listening on " << inet_ntoa(local_addr.sin_addr) << ":"
+                                       << ntohs(local_addr.sin_port));
+
     char buffer[1024];
-    socklen_t sender_addr_len = sizeof(sender_addr);
     memset(buffer, 0, sizeof(buffer));
-    recvfrom(socket_fd, buffer, sizeof(buffer), 0, (sockaddr *)&sender_addr,
-             &sender_addr_len);
-    if (sizeof(buffer) == 0) {
-      RCLCPP_ERROR_STREAM(this->get_logger(),
-                          "Failed to receive data From "
-                              << inet_ntoa(sender_addr.sin_addr) << ":"
-                              << ntohs(sender_addr.sin_port));
-      rclcpp::sleep_for(chrono::seconds(1));
+    sockaddr_in addr;
+    socklen_t addr_len = sizeof(addr);
+
+    // blocking call to receive data
+    auto size = recvfrom(socket_fd, buffer, sizeof(buffer), 0,
+                         (sockaddr *)&addr, &addr_len);
+
+    if (size < 0) {
+      RCLCPP_INFO_STREAM(this->get_logger(),
+                         "Failed Receive Request. Retrying...");
       continue;
     }
 
     // Check if the received data is a ping
-    // request
-    if (memcmp(buffer, "ping-robot", 10) != 0) {
-      RCLCPP_INFO_STREAM(this->get_logger(), "Received invalid data");
-      rclcpp::sleep_for(chrono::seconds(1));
-      continue;
-    } else {
+    if (memcmp(buffer, ping_message, sizeof(*ping_message)) == 0) {
       // Get the remote address and port
-      remote_address = inet_ntoa(sender_addr.sin_addr);
-      remote_port = ntohs(sender_addr.sin_port);
-      RCLCPP_INFO_STREAM(this->get_logger(), "Received ping request from "
-                                                 << remote_address << ":"
-                                                 << remote_port);
-      socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
-      sender_addr.sin_family = AF_INET;
-      sender_addr.sin_addr.s_addr = inet_addr(remote_address.c_str());
-      sender_addr.sin_port = htons(remote_port);
+      remote_addr = addr;
+      remote_address = inet_ntoa(addr.sin_addr);
+      remote_port = ntohs(addr.sin_port);
       // Send a pong response to the remote
-      if (sendto(socket_fd, "pong-robot", 10, 0, (sockaddr *)&sender_addr,
-                 sizeof(sender_addr)) < 0) {
-        RCLCPP_ERROR_STREAM(this->get_logger(), "Failed to send pong response");
-        rclcpp::sleep_for(chrono::seconds(1));
-        continue;
-      }
-      RCLCPP_INFO_STREAM(this->get_logger(), "Sent pong response to "
-                                                 << remote_address << ":"
-                                                 << remote_port);
+      // TODO: fix this magic number 10 (size of pong_message) @OJII3
+      sendto(socket_fd, pong_message, 10, 0, (sockaddr *)&remote_addr,
+             sizeof(remote_addr));
+      connection_state = ConnectionState::Connected;
+      RCLCPP_INFO_STREAM(this->get_logger(), "Connected to " << remote_address
+                                                             << ":"
+                                                             << remote_port);
       break;
     }
+    RCLCPP_INFO_STREAM(this->get_logger(), "Invalid Request. Retrying...");
   }
 
-  return true;
+  return;
 }
 
-void Ros2MobileController::sendToController(
-    const ros2usb_msgs::msg::USBPacket::SharedPtr &msg) {
-
-  auto id = static_cast<byte>(msg->id.data);
-  vector<byte> packet;
-  memcpy(packet.data(), msg->packet.data.data(), msg->packet.data.size());
-  packet.insert(packet.begin(), id);
-  sendto(socket_fd, packet.data(), packet.size(), 0, (sockaddr *)&sender_addr,
-         sizeof(sender_addr));
+void ROS2MobileController::send(const std::vector<std::byte> &buffer) {
+  if (connection_state != ConnectionState::Connected)
+    return;
+  sendto(socket_fd, buffer.data(), buffer.size(), 0, (sockaddr *)&local_addr,
+         sizeof(local_addr));
 }
 
-void Ros2MobileController::topic_callback(
+/**
+ * @brief Proccess a ros2usb_msgs::msg::USBPacket message and convert it to a
+ * std::vector<std::byte> buffer {id, ...packet(including header and footer)}
+ */
+void ROS2MobileController::rosmsgToBytes(
+    const ros2usb_msgs::msg::USBPacket &msg,
+    std::vector<std::byte> &result_buffer) {
+  auto id = static_cast<std::byte>(msg.id.data);
+  memcpy(result_buffer.data(), msg.packet.data.data(), msg.packet.data.size());
+  result_buffer.insert(result_buffer.begin(), id);
+}
+
+void ROS2MobileController::topicCallback(
     const ros2usb_msgs::msg::USBPacket &msg) {
   RCLCPP_INFO_STREAM(this->get_logger(),
                      "Received message from topic " << sub_topic);
-  this->sendToController(std::make_shared<ros2usb_msgs::msg::USBPacket>(msg));
+  std::vector<std::byte> buffer;
+  rosmsgToBytes(msg, buffer);
+  this->send(buffer);
+}
+
+void ROS2MobileController::Receive(std::array<std::byte, 1024> &buffer) {
+  if (connection_state == ConnectionState::Connected) {
+    recvfrom(socket_fd, &buffer, sizeof(buffer), 0, (sockaddr *)&remote_addr,
+             &remote_addr_len);
+  }
 }
