@@ -1,12 +1,16 @@
 #pragma once
 
+#include <algorithm>
 #include <arpa/inet.h>
 #include <bits/stdc++.h>
+#include <cstddef>
+#include <cstdint>
 #include <netinet/in.h>
 #include <rclcpp/rclcpp.hpp>
 #include <ros2usb_msgs/msg/usb_packet.hpp>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <vector>
 
 // TODO: create UDPClient class and use it in this class
 class ROS2MobileController : public rclcpp::Node {
@@ -16,17 +20,19 @@ public:
     Disconnected,
     Connecting,
   };
-  ConnectionState connection_state = Disconnected;
+  ConnectionState connectionState = Disconnected;
   ROS2MobileController();
   ~ROS2MobileController();
-  void connect();
-  void send(const std::vector<std::byte> &buffer);
-  void Receive(std::array<std::byte, 1024> &buffer);
+  bool connect();
+  void start();  // start timtask
+  void update(); // timtask
 
 private:
+  void send(const std::vector<int8_t> &buffer);
+  std::vector<int8_t> receive();
   void topicCallback(const ros2usb_msgs::msg::USBPacket &msg);
-  void rosmsgToBytes(const ros2usb_msgs::msg::USBPacket &msg,
-                     std::vector<std::byte> &result_buffer);
+  std::vector<int8_t> rosmsgToBytes(const ros2usb_msgs::msg::USBPacket &msg);
+  void initSocket();
   int socket_fd;
   struct sockaddr_in local_addr;
   struct sockaddr_in remote_addr;
@@ -36,9 +42,12 @@ private:
   std::string remote_address = "";
   int local_port = 10000;
   int remote_port = 10001;
+  int connectionFailCount = 0;
+  std::vector<int8_t> send_buffer;
+  std::vector<int8_t> receive_buffer;
+  const int maxConnectionFailCount = 10;
   rclcpp::Subscription<ros2usb_msgs::msg::USBPacket>::SharedPtr subscription_;
   rclcpp::Publisher<ros2usb_msgs::msg::USBPacket>::SharedPtr publisher_;
-  const char *ping_message = "ping-robot";
-  const char *pong_message = "pong-robot";
+  const std::string ping_message = "ping-robot";
   const std::string sub_topic = "ros2micon";
 };
