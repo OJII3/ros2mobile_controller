@@ -1,53 +1,67 @@
-#include "ros2mobile_controller.hpp"
+#include <future>
+#include <rclcpp/logging.hpp>
+#include <thread>
 
-using namespace std;
+#include "udp_broadcaster/udp_broadcaster.hpp"
+#include "udp_listener/udp_listener.hpp"
+#include "watchdog/watchdog.hpp"
 
-int main(int argc, char **argv) {
+enum class ConnectionStatus { CONNECTED, DISCONNECTED };
+
+int main(int argc, char *argv[]) {
+  constexpr int max_data_size = 1024;
+  constexpr uint16_t local_listen_port = 10000;
+  constexpr uint16_t local_send_port = 5000;  // not important
+  constexpr uint16_t remote_listen_port = 10001;
+  constexpr std::chrono::milliseconds interval_ms(10);
+  constexpr std::chrono::milliseconds timeout_ms(2000);
+
   rclcpp::init(argc, argv);
-  auto node = make_shared<ROS2MobileController>();
+  rclcpp::executors::MultiThreadedExecutor executor;
+  auto watchdog = std::make_shared<Watchdog>("watchdog");
+  auto udp_broadcaster = std::make_shared<UDPBroadcaster>(
+      "udp_broadcaster", local_send_port, interval_ms);
+  auto udp_listener =
+      std::make_shared<UDPListener>("udp_listener", local_listen_port);
 
-  constexpr int max_connection_failure = 10;
-  int connection_failure = 0;
+  executor.add_node(watchdog);
+  executor.add_node(udp_broadcaster);
+  executor.add_node(udp_listener);
+  RCLCPP_INFO_STREAM(watchdog->get_logger(), "added nodes to executor");
 
-  try {
-    node->connect();
-    std::array<std::byte, 1024> buffer;
-    while (rclcpp::ok()) {
-      switch (node->connection_state) {
-      case ROS2MobileController::ConnectionState::Disconnected: {
-        node->connect();
-        break;
-      }
-      case ROS2MobileController::ConnectionState::Connecting: {
-        break;
-      }
-      case ROS2MobileController::ConnectionState::Connected: {
+  auto connection_status = ConnectionStatus::DISCONNECTED;
 
-        // blocking call to receive data
-        if (connection_failure >= max_connection_failure) {
-          RCLCPP_INFO_STREAM(node->get_logger(), "Connection lost.");
-          node->connection_state =
-              ROS2MobileController::ConnectionState::Disconnected;
-        } else {
-          connection_failure = 0;
-        }
+  auto watchdog_async = std::async(std::launch::async, [&]() -> void {
+    watchdog->startLoop(interval_ms, timeout_ms, [&]() -> void {
+      connection_status = ConnectionStatus::DISCONNECTED;
+      RCLCPP_INFO_STREAM(watchdog->get_logger(), "watchdog: timeout");
+    });
+  });
 
-        // blocking call to receive data
-        node->Receive(buffer);
-        if (sizeof(buffer) == 0) {
-          RCLCPP_INFO_STREAM(node->get_logger(), "Failed Receive Request.");
-          connection_failure++;
-        } else {
-          char *str = reinterpret_cast<char *>(buffer.data());
-          RCLCPP_INFO_STREAM(node->get_logger(), "Received data." << *str);
-        }
-      }
-      }
-    }
+  RCLCPP_INFO_STREAM(watchdog->get_logger(), "starting watchdog loop");
 
-    rclcpp::sleep_for(std::chrono::milliseconds(10));
-    rclcpp::spin(node);
-  } catch (...) {
-    RCLCPP_INFO_STREAM(node->get_logger(), "Exception thrown. Exiting...");
-  }
+  auto listen_async = std::async(std::launch::async, [&]() -> void {
+    udp_listener->startReceiveLoop(
+        max_data_size, [&](const UDPListener::ReceiveResult &result) {
+          connection_status = ConnectionStatus::CONNECTED;
+          watchdog->update();
+          RCLCPP_INFO_STREAM(watchdog->get_logger(),
+                             "listen: received " << result.buffer_.size()
+                                                 << " bytes from "
+                                                 << result.remote_endpoint_);
+        });
+  });
+
+  RCLCPP_INFO_STREAM(watchdog->get_logger(), "starting receive loop");
+
+  auto broadcast_async = std::async(std::launch::async, [&]() -> void {
+    udp_broadcaster->updateBuffer({1, 'S', 'S', 'E', 'E'});
+    udp_broadcaster->startBroadcastLoop(remote_listen_port);
+  });
+
+  RCLCPP_INFO_STREAM(watchdog->get_logger(), "starting broadcast loop");
+
+  executor.spin();
+  rclcpp::shutdown();
+  return 0;
 }
