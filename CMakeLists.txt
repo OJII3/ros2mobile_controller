@@ -5,7 +5,7 @@ project(ros2mobile_controller)
 find_package(ament_cmake_auto REQUIRED)
 
 ament_auto_find_build_dependencies()
-ament_auto_add_library(${PROJECT_NAME} SHARED src/ros2mobile_controller.cpp include/udp_client/udp_client.cpp)
+ament_auto_add_library(${PROJECT_NAME} SHARED src/ros2mobile_controller.cpp)
 ament_auto_add_executable(${PROJECT_NAME}_bin src/main.cpp)
 
 if(BUILD_TESTING)
