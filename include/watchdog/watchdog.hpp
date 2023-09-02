@@ -8,9 +8,8 @@
  * @brief Watchdog class
  * @param node_name Name of the node
  */
-class Watchdog : public rclcpp::Node {
+class Watchdog {
  public:
-  Watchdog(const std::string &node_name);
   /**
    * @brief Start the watchdog, make sure not to provide a blocking callback
    */

@@ -6,14 +6,14 @@
 #include <string>
 #include <vector>
 
-class UDPListener : public rclcpp::Node {
+class UDPListener {
  public:
   UDPListener(const UDPListener &) = delete;
   UDPListener(UDPListener &&) = delete;
   UDPListener &operator=(const UDPListener &) = delete;
   UDPListener &operator=(UDPListener &&) = delete;
-  UDPListener(const std::string &node_name, const uint16_t &local_listen_port);
-  ~UDPListener() override;
+  UDPListener(const uint16_t &local_listen_port);
+  ~UDPListener();
 
   struct ReceiveResult {
     std::vector<uint8_t> buffer_;

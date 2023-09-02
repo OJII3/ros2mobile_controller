@@ -1,7 +1,5 @@
 #include "watchdog.hpp"
 
-Watchdog::Watchdog(const std::string &node_name) : rclcpp::Node(node_name) {}
-
 void Watchdog::startLoop(const std::chrono::milliseconds &interval_ms,
                          const std::chrono::milliseconds &timeout_ms,
                          const std::function<void()> &callback_on_timeout) {
