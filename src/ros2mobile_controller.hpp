@@ -17,7 +17,7 @@ class ROS2MobileController : public rclcpp::Node {
   void stop();
 
  private:
-  static constexpr int qos = 10;
+  static constexpr int qos = 1024;
   static constexpr int max_buffer_size_default = 1024;
   static constexpr uint16_t local_listen_port_default = 10000;
   static constexpr uint16_t local_send_port_default = 5000;  // not important

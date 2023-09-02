@@ -42,6 +42,7 @@ void ROS2MobileController::start() {
               watchdog_->update();
               auto msg = ros2usb_msgs::msg::USBPacket();
               msg.id.data = result.buffer_[0];
+              msg.packet.data.resize(result.buffer_.size() - 1);
               copy(result.buffer_.begin() + 1, result.buffer_.end(),
                    msg.packet.data.begin());
               publisher_->publish(msg);
