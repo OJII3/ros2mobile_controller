@@ -43,19 +43,25 @@ int main(int argc, char *argv[]) {
   auto listen_async = std::async(std::launch::async, [&]() -> void {
     udp_listener->startReceiveLoop(
         max_data_size, [&](const UDPListener::ReceiveResult &result) {
-          connection_status = ConnectionStatus::CONNECTED;
-          watchdog->update();
-          RCLCPP_INFO_STREAM(watchdog->get_logger(),
-                             "listen: received " << result.buffer_.size()
-                                                 << " bytes from "
-                                                 << result.remote_endpoint_);
+          if (result.buffer_.size() > 4 && result.buffer_[1] == 'S' &&
+              result.buffer_[2] == 'S' &&
+              result.buffer_[result.buffer_.size() - 1] == 'E' &&
+              result.buffer_[result.buffer_.size() - 2] == 'E') {
+            connection_status = ConnectionStatus::CONNECTED;
+            watchdog->update();
+            RCLCPP_INFO_STREAM(watchdog->get_logger(),
+                               "listen: received " << result.buffer_.size()
+                                                   << " bytes from "
+                                                   << result.remote_endpoint_);
+          }
         });
   });
 
   RCLCPP_INFO_STREAM(watchdog->get_logger(), "starting receive loop");
 
   auto broadcast_async = std::async(std::launch::async, [&]() -> void {
-    udp_broadcaster->updateBuffer({1, 'S', 'S', 'E', 'E'});
+    udp_broadcaster->updateBuffer({'0', 'S', 'S', 'p', 'i', 'n', 'g', '-', 'r',
+                                   'o', 'b', 'o', 't', 'E', 'E'});
     udp_broadcaster->startBroadcastLoop(remote_listen_port);
   });
 
