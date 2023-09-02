@@ -1,9 +1,7 @@
 #include "udp_listener.hpp"
 
-UDPListener::UDPListener(const std::string &node_name,
-                         const uint16_t &local_listen_port)
-    : rclcpp::Node(node_name),
-      socket_(io_service_,
+UDPListener::UDPListener(const uint16_t &local_listen_port)
+    : socket_(io_service_,
               asio::ip::udp::endpoint(asio::ip::udp::v4(), local_listen_port)),
       local_listen_port_(local_listen_port) {}
 
@@ -11,6 +9,7 @@ UDPListener::~UDPListener() {
   stopLoop();
   io_service_.stop();
   socket_.close();
+  socket_.shutdown(asio::ip::udp::socket::shutdown_both);
 }
 
 void UDPListener::startReceiveLoop(
