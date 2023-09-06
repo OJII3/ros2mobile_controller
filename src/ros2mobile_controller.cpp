@@ -9,9 +9,9 @@ ROS2MobileController::ROS2MobileController()
       udp_broadcaster_(
           std::make_shared<UDPBroadcaster>(local_send_port_default)),
       publisher_(
-          create_publisher<ros2usb_msgs::msg::USBPacket>(topic_name_, qos)),
+          create_publisher<ros2usb_msgs::msg::USBPacket>(pub_topic_name_, qos)),
       subscription_(create_subscription<ros2usb_msgs::msg::USBPacket>(
-          topic_name_, qos,
+          sub_topic_name_, qos,
           std::bind(&ROS2MobileController::subscriptionCallback, this,
                     std::placeholders::_1))) {}
 
@@ -41,9 +41,10 @@ void ROS2MobileController::start() {
               connection_ = Connection::CONNECTED;
               watchdog_->update();
               auto msg = ros2usb_msgs::msg::USBPacket();
-              msg.id.data = result.buffer_[0];
-              msg.packet.data.resize(result.buffer_.size() - 1);
-              copy(result.buffer_.begin() + 1, result.buffer_.end(),
+              /* msg.id.data = result.buffer_[0]; */
+              msg.id.data = 1;
+              msg.packet.data.resize(result.buffer_.size() - 5);
+              copy(result.buffer_.begin() + 3, result.buffer_.end() - 2,
                    msg.packet.data.begin());
               publisher_->publish(msg);
               RCLCPP_INFO_STREAM(get_logger(), "listen: received "
@@ -61,8 +62,8 @@ void ROS2MobileController::start() {
           std::chrono::milliseconds(broadcast_interval_ms_default));
     });
 
-    udp_broadcaster_->updateBuffer({'0', 'S', 'S', 'p', 'i', 'n', 'g', '-', 'r',
-                                    'o', 'b', 'o', 't', 'E', 'E'});
+    udp_broadcaster_->updateMessage({'0', 'S', 'S', 'p', 'i', 'n', 'g', '-',
+                                     'r', 'o', 'b', 'o', 't', 'E', 'E'});
   } catch (...) {
     this->shutdown();
     RCLCPP_ERROR(get_logger(), "Exception in ros2mobile_controller");
@@ -74,8 +75,12 @@ void ROS2MobileController::subscriptionCallback(
   if (connection_ == Connection::CONNECTED) {
     auto buffer =
         std::vector<uint8_t>(msg.packet.data.begin(), msg.packet.data.end());
+    buffer.push_back('E');
+    buffer.push_back('E');
+    buffer.insert(buffer.begin(), 'S');
+    buffer.insert(buffer.begin(), 'S');
     buffer.insert(buffer.begin(), msg.id.data);
-    udp_broadcaster_->updateBuffer(buffer);
+    udp_broadcaster_->updateMessage(buffer);
   }
 };
 

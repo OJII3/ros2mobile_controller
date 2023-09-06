@@ -28,7 +28,7 @@ void UDPBroadcaster::startBroadcastLoop(
 
 void UDPBroadcaster::stopLoop() { is_running_ = false; }
 
-void UDPBroadcaster::updateBuffer(const std::vector<uint8_t> &buffer) {
+void UDPBroadcaster::updateMessage(const std::vector<uint8_t> &buffer) {
   buffer_.clear();
   buffer_.resize(buffer.size());
   memcpy(buffer_.data(), buffer.data(), buffer.size());

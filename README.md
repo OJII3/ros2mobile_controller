@@ -1,3 +1,5 @@
+![GitHub repo size](https://img.shields.io/github/repo-size/OJII3/ros2mobile_controller)
+
 # ROS2 to Mobile Controller
 
 ## Overview
