@@ -14,7 +14,7 @@ class UDPBroadcaster {
   UDPBroadcaster &operator=(UDPBroadcaster &&) = delete;
   UDPBroadcaster(const uint16_t &local_send_port);
   ~UDPBroadcaster();
-  void updateBuffer(const std::vector<uint8_t> &buffer);
+  void updateMessage(const std::vector<uint8_t> &buffer);
   void startBroadcastLoop(const uint16_t &remote_listen_port,
                           const std::chrono::milliseconds &interval_ms);
   void stopLoop();

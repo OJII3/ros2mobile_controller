@@ -22,11 +22,12 @@ class ROS2MobileController : public rclcpp::Node {
   static constexpr uint16_t local_listen_port_default = 10000;
   static constexpr uint16_t local_send_port_default = 5000;  // not important
   static constexpr uint16_t remote_listen_port_default = 10001;
-  static constexpr int watch_interval_ms_default = 10;
+  static constexpr int watch_interval_ms_default = 5;
   static constexpr int watch_timeout_ms_default = 2000;
-  static constexpr int broadcast_interval_ms_default = 10;
+  static constexpr int broadcast_interval_ms_default = 5;
 
-  std::string topic_name_ = "ros2usb";
+  std::string sub_topic_name_ = "micon2ros";
+  std::string pub_topic_name_ = "ros2micon";
 
   Connection connection_ = Connection::DISCONNECTED;
   std::shared_ptr<Watchdog> watchdog_;

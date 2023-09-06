@@ -8,22 +8,22 @@
 
 class UDPListener {
  public:
-  UDPListener(const UDPListener &) = delete;
-  UDPListener(UDPListener &&) = delete;
-  UDPListener &operator=(const UDPListener &) = delete;
-  UDPListener &operator=(UDPListener &&) = delete;
-  UDPListener(const uint16_t &local_listen_port);
+  UDPListener(const UDPListener&) = delete;
+  UDPListener(UDPListener&&) = delete;
+  UDPListener& operator=(const UDPListener&) = delete;
+  UDPListener& operator=(UDPListener&&) = delete;
+  UDPListener(const uint16_t& local_listen_port);
   ~UDPListener();
 
   struct ReceiveResult {
-    std::vector<uint8_t> buffer_;
+    std::vector<uint8_t> buffer_{};
     asio::ip::udp::endpoint remote_endpoint_;
     std::chrono::steady_clock::time_point receive_time_;
   };
 
   void startReceiveLoop(
-      const size_t &max_data_size,
-      const std::function<void(const ReceiveResult &)> &callback);
+      const size_t& max_data_size,
+      const std::function<void(const ReceiveResult&)>& callback);
   void stopLoop();
 
  private:
